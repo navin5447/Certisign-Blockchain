@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { useWeb3, CONTRACT_CONFIG, SUPPORTED_CHAINS } from "@/contexts/Web3Context";
 import apiService from "@/services/api";
-import * as confetti from 'canvas-confetti';
+import confetti from 'canvas-confetti';
 import { Html5Qrcode } from "html5-qrcode";
 
 interface VerificationResult {
@@ -129,6 +129,27 @@ const VerifyPage = () => {
   // QR Scanner Functions
   const startCameraScanner = async () => {
     try {
+      // Check if camera is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error('Camera not supported in this browser. Please use a modern browser or upload a QR image instead.');
+        return;
+      }
+
+      // Request camera permission first
+      try {
+        await navigator.mediaDevices.getUserMedia({ video: true });
+      } catch (permissionError: any) {
+        console.error('Camera permission error:', permissionError);
+        if (permissionError.name === 'NotAllowedError' || permissionError.name === 'PermissionDeniedError') {
+          toast.error('Camera access denied. Please allow camera access in your browser settings.');
+        } else if (permissionError.name === 'NotFoundError') {
+          toast.error('No camera found on this device. Please upload a QR image instead.');
+        } else {
+          toast.error('Failed to access camera. Please check your browser settings or try uploading a QR image.');
+        }
+        return;
+      }
+
       setIsScanning(true);
       setShowQrScanner(true);
       
@@ -152,7 +173,22 @@ const VerifyPage = () => {
       );
     } catch (error: any) {
       console.error('Camera scanner error:', error);
-      toast.error('Failed to start camera scanner');
+      
+      // Provide more specific error messages
+      let errorMsg = 'Failed to start camera scanner. ';
+      if (error.name === 'NotAllowedError') {
+        errorMsg += 'Please allow camera access.';
+      } else if (error.name === 'NotFoundError') {
+        errorMsg += 'No camera found.';
+      } else if (error.name === 'NotReadableError') {
+        errorMsg += 'Camera is already in use.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMsg += 'Camera constraints not satisfied.';
+      } else {
+        errorMsg += 'Try uploading a QR image instead.';
+      }
+      
+      toast.error(errorMsg);
       setShowQrScanner(false);
       setIsScanning(false);
     }
@@ -209,10 +245,21 @@ const VerifyPage = () => {
   const stopScanner = async () => {
     if (qrScannerRef.current) {
       try {
-        await qrScannerRef.current.stop();
+        const state = await qrScannerRef.current.getState();
+        if (state === 2) { // Scanner is running
+          await qrScannerRef.current.stop();
+        }
         qrScannerRef.current.clear();
+        qrScannerRef.current = null;
       } catch (error) {
         console.error('Error stopping scanner:', error);
+        // Try to clear anyway
+        try {
+          qrScannerRef.current?.clear();
+          qrScannerRef.current = null;
+        } catch (e) {
+          console.error('Error clearing scanner:', e);
+        }
       }
     }
     setShowQrScanner(false);
@@ -223,7 +270,15 @@ const VerifyPage = () => {
     return () => {
       // Cleanup scanner on component unmount
       if (qrScannerRef.current) {
-        qrScannerRef.current.stop().catch(console.error);
+        qrScannerRef.current.stop().catch(() => {
+          // Ignore errors during cleanup
+        }).finally(() => {
+          try {
+            qrScannerRef.current?.clear();
+          } catch (e) {
+            // Ignore errors
+          }
+        });
       }
     };
   }, []);
