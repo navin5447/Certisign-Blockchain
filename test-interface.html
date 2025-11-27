@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate Testing Interface</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        button { padding: 10px 20px; margin: 5px; background: #007cba; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #005a87; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; white-space: pre-wrap; }
+        input, select { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🎓 Certificate System Test Interface</h1>
+    
+    <div class="section">
+        <h2>1. Health Check</h2>
+        <button onclick="testHealth()">Test Connection</button>
+        <div id="healthResult" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>2. Issue Certificate</h2>
+        <div>
+            <label>Recipient Address:</label>
+            <input type="text" id="recipientAddress" value="0x4914Be0a6c91B7291A1fb1d006b45b2AA1ee4be1" style="width: 400px;">
+        </div>
+        <div>
+            <label>Student Name:</label>
+            <input type="text" id="studentName" value="John Doe">
+        </div>
+        <div>
+            <label>Course:</label>
+            <input type="text" id="course" value="Computer Science">
+        </div>
+        <div>
+            <label>Institution:</label>
+            <input type="text" id="institution" value="BlockChain University">
+        </div>
+        <button onclick="issueCertificate()">Issue Certificate</button>
+        <div id="issueResult" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>3. Verify Certificate</h2>
+        <div>
+            <label>Token ID:</label>
+            <input type="number" id="tokenId" value="1">
+        </div>
+        <button onclick="verifyCertificate()">Verify Certificate</button>
+        <div id="verifyResult" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>4. List All Certificates</h2>
+        <button onclick="listCertificates()">List All Certificates</button>
+        <div id="listResult" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4001';
+
+        async function testHealth() {
+            const resultDiv = document.getElementById('healthResult');
+            resultDiv.innerHTML = 'Testing connection...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/health`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ Connection successful!
+
+Network: ${data.network.name} (Chain ID: ${data.network.chainId})
+Wallet: ${data.wallet.address}
+Balance: ${data.wallet.balance}
+Contract: ${data.contract.address}
+Total Certificates: ${data.contract.totalSupply}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ Health check failed: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ Connection failed: ${error.message}`;
+            }
+        }
+
+        async function issueCertificate() {
+            const resultDiv = document.getElementById('issueResult');
+            resultDiv.innerHTML = 'Issuing certificate...';
+            
+            try {
+                const certificateData = {
+                    recipientAddress: document.getElementById('recipientAddress').value,
+                    studentName: document.getElementById('studentName').value,
+                    course: document.getElementById('course').value,
+                    institution: document.getElementById('institution').value,
+                    issueDate: Math.floor(Date.now() / 1000),
+                    graduationDate: Math.floor(Date.now() / 1000)
+                };
+
+                const response = await fetch(`${API_BASE}/api/issue-certificate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(certificateData)
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ Certificate issued successfully!
+
+Token ID: ${data.data.tokenId}
+Transaction Hash: ${data.data.transactionHash}
+Block Number: ${data.data.blockNumber}
+Gas Used: ${data.data.gasUsed}
+
+🔍 View on Explorer: ${data.data.explorerUrl}
+
+Student: ${data.data.metadata.studentName}
+Course: ${data.data.metadata.course}
+Institution: ${data.data.metadata.institution}`;
+
+                    // Update the verify token ID
+                    document.getElementById('tokenId').value = data.data.tokenId;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ Certificate issuance failed: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ Request failed: ${error.message}`;
+            }
+        }
+
+        async function verifyCertificate() {
+            const resultDiv = document.getElementById('verifyResult');
+            const tokenId = document.getElementById('tokenId').value;
+            resultDiv.innerHTML = `Verifying certificate with Token ID: ${tokenId}...`;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/verify/${tokenId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const cert = data.data.certificate;
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ Certificate verification successful!
+
+Token ID: ${data.data.tokenId}
+Student Name: ${cert.studentName}
+Course: ${cert.course}
+Institution: ${cert.institution}
+Issue Date: ${cert.issueDate}
+Graduation Date: ${cert.graduationDate}
+Is Revoked: ${cert.isRevoked ? '❌ Yes' : '✅ No'}
+IPFS Hash: ${cert.ipfsHash}
+Token URI: ${data.data.tokenURI}
+
+🔍 View on Explorer: ${data.data.explorerUrl}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ Certificate verification failed: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ Request failed: ${error.message}`;
+            }
+        }
+
+        async function listCertificates() {
+            const resultDiv = document.getElementById('listResult');
+            resultDiv.innerHTML = 'Loading certificates...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/certificates`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    let output = `✅ Found ${data.data.totalSupply} certificates:\n\n`;
+                    
+                    if (data.data.certificates.length === 0) {
+                        output += 'No certificates issued yet.';
+                    } else {
+                        data.data.certificates.forEach(cert => {
+                            output += `Token ID ${cert.tokenId}: ${cert.studentName}
+  Course: ${cert.course}
+  Institution: ${cert.institution}
+  Issue Date: ${cert.issueDate}
+  Status: ${cert.isRevoked ? 'Revoked' : 'Valid'}
+
+`;
+                        });
+                    }
+                    
+                    resultDiv.innerHTML = output;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ Failed to list certificates: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ Request failed: ${error.message}`;
+            }
+        }
+
+        // Auto-test connection on page load
+        window.onload = () => {
+            testHealth();
+        };
+    </script>
+</body>
+</html>
